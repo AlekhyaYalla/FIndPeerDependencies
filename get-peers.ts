@@ -5,15 +5,15 @@ var DomParser = require('dom-parser');
 // var DomParser = require('dom-parser');
 
 'use strict'
-const dependency = "react";
-const lockFilePath = "./yarn.lock"
+const mainDependency = "react";
+const lockFilePath = "../1JS/midgard/yarn.lock"
 
 function GetReactDepPkg(deps){
   let reactDeps = [];
   deps.forEach(pkg => {
     const dependencies = pkg.dependencies;
     if(dependencies != undefined){
-      const reactKey = Object.keys(dependencies).find(k => k === dependency);
+      const reactKey = Object.keys(dependencies).find(k => k === mainDependency);
       if(reactKey)
       {
         reactDeps.push(pkg.key);
@@ -26,28 +26,28 @@ function GetReactDepPkg(deps){
 }
 function GetPeerDepPkg(deps){
   const packageJson = require('package-json');
-  let reactPeers = [];  
-  console.log("Dependencies with REACT as peer-dependency:");
+  // console.log("Dependencies with REACT as peer-dependency:");
   deps.forEach(pkg => {
     (async () => {
       try{
         const pkgJson = await packageJson(pkg.name, pkg.version);
-        if(pkgJson.peerDependencies != undefined){
-          const reactKey = Object.keys(pkgJson.peerDependencies).find(dep => dep === dependency);
-          if(reactKey){
-            console.log(pkg.name, pkg.version);
-            reactPeers.push(pkg.key);
-          }
+        if(pkgJson.peerDependencies != undefined
+          &&  pkgJson["peerDependencies"][mainDependency] != undefined){
+          // const reactKey = Object.keys(pkgJson.peerDependencies).filter(dep => dep === dependency);
+          // if(reactKey){
+            console.log(pkgJson.name,"@", pkgJson.version, ":",mainDependency,"---",pkgJson["peerDependencies"][mainDependency]);
+          // }
         }
       }
       catch(error)
       {
-        // if((<Error>error).message.includes("PackageNotFoundError") )
-        //   console.log(pkg.dependencyName, " is not in public registry");
-        console.log(error);
+        if(error.message.includes("could not be found") )
+        {
+          // console.log("Private package, making other call");
+          DoGetCall(pkg.name, pkg.version);
+        }
       }
-    }
-    )();
+    })();
     // axios.get(`https://unpkg.com/${pkg.name}@${pkg.version}/package.json`)
     //             .then(response => {
     //                 if (!response) {
@@ -113,16 +113,12 @@ function RemoveDuplicateDeps(deps){
   return deps;
 }
 
-export interface MyObj {
-  'ms.vss-web.component-data': Object;
-}
-
 async function DoGetCall(dependency, version){
   try{
-    console.log("Method Started");
+    // console.log("Method Started");
     return axios({
       // url: `https://pkgs.dev.azure.com/office/office/_apis/packaging/feeds/1JS/npm/packages/@ms/sharedcomments/versions/3.22.24/content?api-version=6.1-preview.1`,
-      url: `https://office.visualstudio.com/Office/_packaging?_a=package&feed=1JS&package=office-ui-fabric-react&protocolType=Npm&version=7.180.3`,
+      url: `https://office.visualstudio.com/Office/_packaging?_a=package&feed=1JS&package=`+dependency+`&protocolType=Npm&version=`+version,
       method: 'get',
       timeout: 30000,
       headers: {
@@ -130,21 +126,25 @@ async function DoGetCall(dependency, version){
       },
       auth: {
         username: '',
-        password: 'pnoalzmhien636k6ynceucf4s5foqmpduxyetsrrmuutc6kd7jma'
+        password: '<Your pat>'
       }})
       .then((res) => {
         var parser = new DomParser();
         var htmlDoc = parser.parseFromString(res.data, 'text/html');
         const dataProvider = htmlDoc.getElementById('dataProviders').textContent;
         const dataJson = JSON.parse(dataProvider);
-        
-        // let jsonObj: any = JSON.parse(dataProvider); // string to generic object first
-        // let employee: MyObj = <MyObj>jsonObj;
-        // var x = dataJson.data."ms.vss-web.component-data";
-        const dependencies = dataJson["data"]["ms.feed.package-hub-data-provider"].packageDetailsResult.packageVersion.dependencies;
-        const peerDependencies = dependencies.filter(obj => obj.group!= undefined && obj.group == "peerDependencies");
-        console.log("My test:\n", dependencies);
-        console.log("Done call: Data from response\n");
+        if(dataJson["data"]["ms.feed.package-hub-data-provider"] && dataJson["data"]["ms.feed.package-hub-data-provider"].packageDetailsResult
+        && dataJson["data"]["ms.feed.package-hub-data-provider"].packageDetailsResult.packageVersion
+        && dataJson["data"]["ms.feed.package-hub-data-provider"].packageDetailsResult.packageVersion.dependencies){
+          const dependencies = dataJson["data"]["ms.feed.package-hub-data-provider"].packageDetailsResult.packageVersion.dependencies;
+          const peerDependencies = dependencies.filter(obj => obj.group!= undefined && obj.group == "peerDependencies" 
+          && obj.packageName == mainDependency);
+          if(peerDependencies.length >0){
+            // console.log("All",dependencies);
+            console.log("PRIVATE",dependency, "@",version, peerDependencies);
+          }
+          // console.log("Done call: Data from response\n");
+        }
       })
       .catch (err => console.error(err));
   }
@@ -158,6 +158,9 @@ async function DoGetCall(dependency, version){
 const deps = RemoveDuplicateDeps(GetAllLockDeps());
 // const reactDeps = GetReactDepPkg(deps);
 GetPeerDepPkg(deps);
+// const version = "2.3.4";
+// const str = `https://office.visualstudio.com/Office/_packaging?_a=package&feed=1JS&package=`+dependency+`&protocolType=Npm&version=`+version;
+// console.log(str);
 
     
 
